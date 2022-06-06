@@ -1,0 +1,298 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An argument parser that is truly zero-cost, similar to Unix’s `getopts`."><meta name="keywords" content="rust, rustlang, rust-lang, getargs"><title>getargs - Rust</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Regular.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../FiraSans-Medium.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Regular.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceSerif4-Bold.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../SourceCodePro-Semibold.ttf.woff2"><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../ayu.css" disabled><link rel="stylesheet" type="text/css" href="../dark.css" disabled><link rel="stylesheet" type="text/css" href="../light.css" id="themeStyle"><script id="default-settings" ></script><script src="../storage.js"></script><script src="../crates.js"></script><script defer src="../main.js"></script>
+    <noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="alternate icon" type="image/png" href="../favicon-16x16.png"><link rel="alternate icon" type="image/png" href="../favicon-32x32.png"><link rel="icon" type="image/svg+xml" href="../favicon.svg"></head><body class="rustdoc mod crate"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle">&#9776;</button><a class="sidebar-logo" href="../getargs/index.html"><div class="logo-container"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></div>
+        </a><h2 class="location"></h2>
+    </nav>
+    <nav class="sidebar"><a class="sidebar-logo" href="../getargs/index.html"><div class="logo-container"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></div>
+        </a><h2 class="location"><a href="#">Crate getargs</a></h2><div class="sidebar-elems"><div class="block"><ul><li class="version">Version 0.5.0</li><li><a id="all-types" href="all.html">All Items</a></li></div></ul><section><div class="block"><ul><li><a href="#structs">Structs</a></li><li><a href="#enums">Enums</a></li><li><a href="#traits">Traits</a></li><li><a href="#types">Type Definitions</a></li></ul></div></section><div id="sidebar-vars" data-name="getargs" data-ty="mod" data-relpath=""></div><script defer src="sidebar-items.js"></script></div></nav><main><div class="width-limiter"><div class="sub-container"><a class="sub-logo-container" href="../getargs/index.html"><img class="rust-logo" src="../rust-logo.svg" alt="logo"></a><nav class="sub"><form class="search-form"><div class="search-container"><span></span><input class="search-input" name="search" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><button type="button" id="help-button" title="help">?</button><div id="settings-menu" tabindex="-1">
+                                <a href="../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../wheel.svg"></a></div>
+                        </div></form></nav></div><section id="main-content" class="content"><div class="main-heading">
+    <h1 class="fqn"><span class="in-band">Crate <a class="mod" href="#">getargs</a><button id="copy-path" onclick="copy_path(this)" title="Copy item path to clipboard"><img src="../clipboard.svg" width="19" height="18" alt="Copy item path"></button></span></h1><span class="out-of-band"><a class="srclink" href="../src/getargs/lib.rs.html#1-882">source</a> · <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span></div><details class="rustdoc-toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An argument parser that is truly zero-cost, similar to Unix’s
+<code>getopts</code>.</p>
+<h3 id="about"><a href="#about">About</a></h3>
+<p><code>getargs</code> is a low-level, efficient and versatile argument parser
+that works similarly to <code>getopts</code>. It works by producing a stream of
+options, and after each option, your code decides whether to require
+and retrieve the value for the option or not.</p>
+<p>You don’t have to declare a list of valid options up-front, so
+<code>getargs</code> does not have to allocate space for them or spend runtime
+searching for them. This also means that you have to write your own
+help message, but since <code>--help</code> is just another flag, there are no
+restrictions on what you do with it.</p>
+<h3 id="features"><a href="#features">Features</a></h3>
+<ul>
+<li>Short <code>-f</code> and long <code>--flag</code> flags</li>
+<li>Required implicit values <code>-i VALUE</code> and <code>--implicit VALUE</code></li>
+<li>Required or optional explicit values <code>-eVALUE</code> and
+<code>--explicit=VALUE</code></li>
+<li>Positional arguments and <code>--</code></li>
+<li>Parse options at the beginning of the argument list, or anywhere</li>
+</ul>
+<h3 id="benefits"><a href="#benefits">Benefits</a></h3>
+<ul>
+<li>Zero cost</li>
+<li>Zero copy</li>
+<li>Zero unsafe code</li>
+<li>Zero dependencies</li>
+<li>Zero allocation</li>
+<li>Simple to use yet versatile</li>
+<li><code>#![no_std]</code>-compatible</li>
+<li>Compatible with <code>&amp;str</code> and <code>&amp;[u8]</code></li>
+</ul>
+<h3 id="performance"><a href="#performance">Performance</a></h3>
+<p><code>getargs</code> has had a lot of attention put into profiling and
+optimization, and on a modern machine it takes under 0.2μs to parse
+a short array of 12 arguments.</p>
+<p>In our testing, <code>getargs</code> is faster than every other argument
+parsing library on crates.io. Its closest competitor is <code>gumdrop</code>,
+which is only ~30% slower in the worst case, and its second-closest
+competitor is <code>getopt</code>, which takes three times as long. Other
+libraries degrade quickly; <code>clap</code> takes 45x longer. (This is not an
+entirely fair comparison though, as <code>clap</code> is not just an
+argument-parsing library, but an entire command-line application
+framework. It is perhaps overqualified for simple tasks.)</p>
+<h3 id="overview"><a href="#overview">Overview</a></h3>
+<ul>
+<li>
+<p><a href="struct.Options.html" title="Options"><code>Options</code></a> is the main export of the library, and handles
+argument parsing. If you don’t need a step-by-step tutorial, its
+documentation contains everything you need to jump right in.</p>
+</li>
+<li>
+<p><a href="trait.Argument.html" title="Argument"><code>Argument</code></a> is implemented for each type that can be parsed by
+<a href="struct.Options.html" title="Options"><code>Options</code></a>, such as <code>&amp;str</code> and <code>&amp;[u8]</code>.</p>
+</li>
+<li>
+<p><a href="enum.Opt.html" title="Opt"><code>Opt</code></a> represents a short or long option, returned by
+<a href="struct.Options.html#method.next_opt" title="Options::next_opt"><code>Options::next_opt</code></a>.</p>
+</li>
+<li>
+<p><a href="enum.Arg.html" title="Arg"><code>Arg</code></a> represents either an option or a positional argument,
+returned by <a href="struct.Options.html#method.next_arg" title="Options::next_arg"><code>Options::next_arg</code></a>.</p>
+</li>
+<li>
+<p><a href="enum.Error.html" title="Error"><code>Error</code></a> represents a parsing error.</p>
+</li>
+</ul>
+<h3 id="obtaining-an-options"><a href="#obtaining-an-options">Obtaining an <code>Options</code></a></h3>
+<p>First, get an iterator over your arguments as <code>&amp;str</code> or <code>&amp;[u8]</code>.
+Usually, this is done by using <a href="https://doc.rust-lang.org/nightly/std/env/fn.args.html" title="std::env::args"><code>args()</code></a> or
+<a href="https://doc.rust-lang.org/nightly/std/env/fn.args_os.html" title="std::env::args_os"><code>args_os()</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let</span> <span class="ident">args</span> <span class="op">=</span> <span class="ident">std::env::args</span>()
+    .<span class="ident">skip</span>(<span class="number">1</span>) <span class="comment">// remember to skip the executable name!</span>
+    .<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();</code></pre></div>
+<p>On Linux, you can use the <a href="https://crates.io/crates/argv"><code>argv</code></a> crate and <a href="https://doc.rust-lang.org/nightly/std/os/unix/ffi/os_str/trait.OsStrExt.html"><code>OsStrExt</code></a> to get an
+iterator of <code>&amp;[u8]</code> without allocating:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// As seen in the `no_alloc` example - only works on Linux due to</span>
+<span class="comment">// the use of `OsStrExt::as_bytes`</span>
+<span class="kw">let</span> <span class="ident">args</span> <span class="op">=</span> <span class="ident">argv::iter</span>().<span class="ident">skip</span>(<span class="number">1</span>).<span class="ident">map</span>(<span class="ident">OsStrExt::as_bytes</span>);</code></pre></div>
+<p>On other platforms, <code>argv</code> will leak memory, so be careful!</p>
+<p>Then, pass the iterator to <a href="struct.Options.html#method.new" title="Options::new"><code>Options::new</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ...</span>
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">args</span>);</code></pre></div>
+<h3 id="accepting-options-at-the-start"><a href="#accepting-options-at-the-start">Accepting options at the start</a></h3>
+<p>If your command line looks like this, and does not accept options
+after positional arguments:</p>
+<div class="example-wrap"><pre class="language-text"><code>usage: command [OPTIONS] [ARGS]...</code></pre></div>
+<p>then you can use <a href="struct.Options.html#method.next_opt" title="Options::next_opt"><code>Options::next_opt</code></a> directly, just like classical
+<code>getargs</code> (before 0.5.0) supported as <code>next</code>. The method is meant to
+be called in a <a href="https://doc.rust-lang.org/rust-by-example/flow_control/while_let.html"><code>while let</code></a> loop, like so:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ...</span>
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">iter</span>);
+
+<span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">opt</span>) <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">next_opt</span>()<span class="question-mark">?</span> {
+    <span class="comment">// read on!</span>
+}</code></pre></div>
+<p><a href="struct.Options.html" title="Options"><code>Options</code></a> notably does not implement <a href="https://doc.rust-lang.org/nightly/core/iter/traits/iterator/trait.Iterator.html" title="Iterator"><code>Iterator</code></a>, because a <code>for</code>
+loop borrows the iterator for the duration of the loop, which would
+make it impossible to call <a href="struct.Options.html#method.value" title="Options::value"><code>Options::value</code></a> and friends. Interior
+mutability would make this possible, but it is difficult to find an
+API design that does not sacrifice performance.</p>
+<p>After each <a href="enum.Opt.html" title="Opt"><code>Opt</code></a>, you can choose to do one of three things:</p>
+<ul>
+<li>
+<p>Call <a href="struct.Options.html#method.value" title="Options::value"><code>Options::value</code></a>, which will declare that the option
+requires a value, and return it or <a href="enum.Error.html#variant.RequiresValue" title="Error::RequiresValue"><code>Error::RequiresValue</code></a>.</p>
+</li>
+<li>
+<p>Call <a href="struct.Options.html#method.value_opt" title="Options::value_opt"><code>Options::value_opt</code></a>, which will declare that the option
+may have an <em>optional</em> value, and return the value, if any.</p>
+</li>
+<li>
+<p>Do nothing before the next call to <code>next_opt</code>, which will assume
+that the option should not have a value (and return an
+<a href="enum.Error.html#variant.DoesNotRequireValue" title="Error::DoesNotRequireValue"><code>Error::DoesNotRequireValue</code></a> if an explicit value is found).</p>
+</li>
+</ul>
+<p><a href="struct.Options.html#method.next_opt" title="Options::next_opt"><code>Options::next_opt</code></a> will return <code>Ok(None)</code> when there are no
+arguments left, or when <code>--</code> is encountered. Once that happens, you
+can iterate over the rest of the arguments as positional:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ...</span>
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">iter</span>);
+
+<span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">opt</span>) <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">next_opt</span>()<span class="question-mark">?</span> {
+    <span class="comment">// ...</span>
+}
+
+<span class="kw">for</span> <span class="ident">positional</span> <span class="kw">in</span> <span class="ident">opts</span>.<span class="ident">positionals</span>() {
+    <span class="comment">// ...</span>
+}
+</code></pre></div>
+<p>Here is the <code>print</code> example, which shows required and optional
+values:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use</span> <span class="ident">getargs</span>::{<span class="ident">Opt</span>, <span class="ident">Options</span>};
+<span class="kw">use</span> <span class="ident">std::env::args</span>;
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">args</span> <span class="op">=</span> <span class="ident">args</span>().<span class="ident">skip</span>(<span class="number">1</span>).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+
+    <span class="kw">if</span> <span class="ident">args</span>.<span class="ident">is_empty</span>() {
+        <span class="ident">args</span>.<span class="ident">push</span>(<span class="ident">String::from</span>(<span class="string">&quot;--help&quot;</span>)); <span class="comment">// help the user out :)</span>
+    }
+
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">args</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="ident">String::as_str</span>));
+
+    <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">opt</span>) <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">next_opt</span>().<span class="ident">expect</span>(<span class="string">&quot;argument parsing error&quot;</span>) {
+        <span class="kw">match</span> <span class="ident">opt</span> {
+            <span class="ident">Opt::Short</span>(<span class="string">&#39;h&#39;</span>) <span class="op">|</span> <span class="ident">Opt::Long</span>(<span class="string">&quot;help&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(
+                    <span class="string">r&quot;Usage: print.rs [OPTIONS] [ARGS]...
+This example prints all options and positional arguments passed to it.
+It also includes some short and long options that have a required or
+optional value.
+
+  -h, --help       display this help and exit
+  -o, --optional   consume an optional value and print the result
+  -r, --required   consume a required value and print it
+  &lt;anything else&gt;  print the flag passed&quot;</span>
+                );
+
+                <span class="kw">return</span>;
+            }
+
+            <span class="ident">Opt::Short</span>(<span class="string">&#39;o&#39;</span>) <span class="op">|</span> <span class="ident">Opt::Long</span>(<span class="string">&quot;optional&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">&quot;option {:?}: {:?}&quot;</span>, <span class="ident">opt</span>, <span class="ident">opts</span>.<span class="ident">value_opt</span>());
+            }
+
+            <span class="ident">Opt::Short</span>(<span class="string">&#39;r&#39;</span>) <span class="op">|</span> <span class="ident">Opt::Long</span>(<span class="string">&quot;required&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">&quot;option {:?}: {:?}&quot;</span>, <span class="ident">opt</span>, <span class="ident">opts</span>.<span class="ident">value</span>());
+            }
+
+            <span class="kw">_</span> =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;option: {:?}&quot;</span>, <span class="ident">opt</span>),
+        }
+    }
+
+    <span class="kw">for</span> <span class="ident">arg</span> <span class="kw">in</span> <span class="ident">opts</span>.<span class="ident">positionals</span>() {
+        <span class="macro">eprintln!</span>(<span class="string">&quot;positional: {:?}&quot;</span>, <span class="ident">arg</span>)
+    }
+}</code></pre></div>
+<h3 id="accepting-options-anywhere"><a href="#accepting-options-anywhere">Accepting options anywhere</a></h3>
+<p><code>getargs</code> includes a utility function, <a href="struct.Options.html#method.next_arg" title="Options::next_arg"><code>Options::next_arg</code></a>, that
+can be used to easily accept both options and positional arguments
+anywhere. This is starting to become the behavior of many modern
+programs - arguments that do not begin with <code>-</code> or <code>--</code> are counted
+as positional, but option parsing still continues.</p>
+<p>All you have to do is call <code>next_arg</code> instead of <code>next_opt</code>, and
+match on <a href="enum.Arg.html" title="Arg"><code>Arg</code></a> rather than <a href="enum.Opt.html" title="Opt"><code>Opt</code></a>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// ...</span>
+<span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">iter</span>);
+
+<span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">arg</span>) <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">next_arg</span>()<span class="question-mark">?</span> {
+    <span class="comment">// ...</span>
+    <span class="kw">match</span> <span class="ident">arg</span> {
+        <span class="ident">Arg::Short</span>(<span class="string">&#39;h&#39;</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="string">&quot;help&quot;</span>) =&gt; { <span class="comment">/* ... */</span> }
+        <span class="ident">Arg::Short</span>(<span class="string">&#39;v&#39;</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="string">&quot;version&quot;</span>) =&gt; { <span class="comment">/* ... */</span> }
+        <span class="ident">Arg::Positional</span>(<span class="ident">positional</span>) =&gt; { <span class="comment">/* ... */</span> }
+        <span class="kw">_</span> =&gt; <span class="macro">panic!</span>(<span class="string">&quot;Unknown option: {}&quot;</span>, <span class="ident">arg</span>)
+    }
+}
+</code></pre></div>
+<p><a href="enum.Arg.html" title="Arg"><code>Arg</code></a> also has some utility methods, like <a href="enum.Arg.html#method.opt" title="Arg::opt"><code>Arg::opt</code></a> and
+<a href="enum.Arg.html#method.positional" title="Arg::positional"><code>Arg::positional</code></a>.</p>
+<p>The rest is virtually identical to parsing with <code>next_opt</code>.</p>
+<p>Here is the <code>anywhere</code> example, which is similar to <code>print</code> but
+uses <code>next_arg</code> instead of <code>next_opt</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="doccomment">//! This example shows how to use the `Options::next_arg` method to</span>
+<span class="doccomment">//! accept options and positional arguments anywhere.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Try it with arguments like: `x -r hi y -ohi z -- --not-a-flag`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! You will get:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```text</span>
+<span class="doccomment">//! positional: &quot;x&quot;</span>
+<span class="doccomment">//! option Short(&#39;r&#39;): Ok(&quot;hi&quot;)</span>
+<span class="doccomment">//! positional: &quot;y&quot;</span>
+<span class="doccomment">//! option Short(&#39;o&#39;): Some(&quot;hi&quot;)</span>
+<span class="doccomment">//! positional: &quot;z&quot;</span>
+<span class="doccomment">//! positional: &quot;--not-a-flag&quot;</span>
+<span class="doccomment">//! ```</span>
+
+<span class="kw">use</span> <span class="ident">getargs</span>::{<span class="ident">Arg</span>, <span class="ident">Options</span>};
+<span class="kw">use</span> <span class="ident">std::env::args</span>;
+
+<span class="kw">fn</span> <span class="ident">main</span>() {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">args</span> <span class="op">=</span> <span class="ident">args</span>().<span class="ident">skip</span>(<span class="number">1</span>).<span class="ident">collect</span>::<span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span><span class="op">&gt;</span>();
+
+    <span class="kw">if</span> <span class="ident">args</span>.<span class="ident">is_empty</span>() {
+        <span class="ident">args</span>.<span class="ident">push</span>(<span class="ident">String::from</span>(<span class="string">&quot;--help&quot;</span>)); <span class="comment">// help the user out :)</span>
+    }
+
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">opts</span> <span class="op">=</span> <span class="ident">Options::new</span>(<span class="ident">args</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="ident">String::as_str</span>));
+
+    <span class="kw">while</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">arg</span>) <span class="op">=</span> <span class="ident">opts</span>.<span class="ident">next_arg</span>().<span class="ident">expect</span>(<span class="string">&quot;argument parsing error&quot;</span>) {
+        <span class="kw">match</span> <span class="ident">arg</span> {
+            <span class="ident">Arg::Short</span>(<span class="string">&#39;h&#39;</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="string">&quot;help&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(
+                    <span class="string">r&quot;Usage: anywhere.rs [OPTIONS/ARGS]...
+This example prints all options and positional arguments passed to it,
+but options and positional arguments can be passed anywhere. It also
+includes some short and long options that have a required or optional
+value, just like print.rs.
+
+  -h, --help       display this help and exit
+  -o, --optional   consume an optional value and print the result
+  -r, --required   consume a required value and print it
+  &lt;anything else&gt;  print the flag passed&quot;</span>
+                );
+
+                <span class="kw">return</span>;
+            }
+
+            <span class="ident">Arg::Short</span>(<span class="string">&#39;o&#39;</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="string">&quot;optional&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">&quot;option {:?}: {:?}&quot;</span>, <span class="ident">arg</span>, <span class="ident">opts</span>.<span class="ident">value_opt</span>());
+            }
+
+            <span class="ident">Arg::Short</span>(<span class="string">&#39;r&#39;</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="string">&quot;required&quot;</span>) =&gt; {
+                <span class="macro">eprintln!</span>(<span class="string">&quot;option {:?}: {:?}&quot;</span>, <span class="ident">arg</span>, <span class="ident">opts</span>.<span class="ident">value</span>());
+            }
+
+            <span class="ident">Arg::Short</span>(<span class="kw">_</span>) <span class="op">|</span> <span class="ident">Arg::Long</span>(<span class="kw">_</span>) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;option: {:?}&quot;</span>, <span class="ident">arg</span>),
+            <span class="ident">Arg::Positional</span>(<span class="ident">arg</span>) =&gt; <span class="macro">eprintln!</span>(<span class="string">&quot;positional: {:?}&quot;</span>, <span class="ident">arg</span>),
+        }
+    }
+}</code></pre></div>
+<h2 id="examples"><a href="#examples">Examples</a></h2>
+<p>There are other examples available on <a href="https://github.com/j-tai/getargs/tree/master/examples">GitHub</a>.</p>
+</div></details><h2 id="structs" class="small-section-header"><a href="#structs">Structs</a></h2>
+<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="struct" href="struct.IntoPositionals.html" title="getargs::IntoPositionals struct">IntoPositionals</a></div><div class="item-right docblock-short"><p>An iterator over what used to be the positional arguments of an
+<a href="struct.Options.html" title="crate::Options"><code>Options</code></a>.</p>
+</div></div><div class="item-row"><div class="item-left module-item"><a class="struct" href="struct.Options.html" title="getargs::Options struct">Options</a></div><div class="item-right docblock-short"><p>An argument parser.</p>
+</div></div><div class="item-row"><div class="item-left module-item"><a class="struct" href="struct.Positionals.html" title="getargs::Positionals struct">Positionals</a></div><div class="item-right docblock-short"><p>An iterator over the positional arguments of an <a href="struct.Options.html" title="Options"><code>Options</code></a>.</p>
+</div></div></div><h2 id="enums" class="small-section-header"><a href="#enums">Enums</a></h2>
+<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="enum" href="enum.Arg.html" title="getargs::Arg enum">Arg</a></div><div class="item-right docblock-short"><p>An option or positional argument.</p>
+</div></div><div class="item-row"><div class="item-left module-item"><a class="enum" href="enum.Error.html" title="getargs::Error enum">Error</a></div><div class="item-right docblock-short"><p>An argument parsing error.</p>
+</div></div><div class="item-row"><div class="item-left module-item"><a class="enum" href="enum.Opt.html" title="getargs::Opt enum">Opt</a></div><div class="item-right docblock-short"><p>A short or long option.</p>
+</div></div></div><h2 id="traits" class="small-section-header"><a href="#traits">Traits</a></h2>
+<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="trait" href="trait.Argument.html" title="getargs::Argument trait">Argument</a></div><div class="item-right docblock-short"><p>The argument trait for types that can be parsed by
+<a href="struct.Options.html" title="crate::Options"><code>Options</code></a>.</p>
+</div></div></div><h2 id="types" class="small-section-header"><a href="#types">Type Definitions</a></h2>
+<div class="item-table"><div class="item-row"><div class="item-left module-item"><a class="type" href="type.Result.html" title="getargs::Result type">Result</a></div><div class="item-right docblock-short"></div></div></div></section></div></main><div id="rustdoc-vars" data-root-path="../" data-current-crate="getargs" data-themes="ayu,dark,light" data-resource-suffix="" data-rustdoc-version="1.63.0-nightly (28b891916 2022-05-29)" ></div>
+</body></html>
