@@ -1,5 +1,3 @@
-use core::fmt::Debug;
-
 /// The argument trait for types that can be parsed by
 /// [`Options`][crate::Options].
 ///
@@ -17,15 +15,24 @@ use core::fmt::Debug;
 /// arguments that cannot be coerced into `&str` or `&[u8]` for whatever
 /// reason. If they can be in any way, you should use an
 /// [`Iterator::map`] instead of implementing [`Argument`].
-///
-/// Implementing `Argument` requires [`Copy`], [`Eq`], and [`Debug`]
-/// because it simplifies `#[derive]`s on `getargs`' side and codifies
-/// the inexpensive, zero-copy expectations of argument types. This
-/// should be a borrow like `&str`, not an owned struct like `String`.
-pub trait Argument: Copy + Eq + Debug {
-    /// The short-flag type. For [`&str`], this is [`char`]. For
-    /// [`&[u8]`][slice], this is `u8`.
-    type ShortOpt: Copy + Eq + Debug;
+pub trait Argument: Sized {
+    /// The type of a short option cluster. A short option cluster
+    /// consists of 1 or more short options and optionally a value for
+    /// the last short option.
+    type ShortCluster;
+
+    /// The type of each option in a short option cluster, for example
+    /// [`char`].
+    type ShortOpt: Clone;
+
+    /// The type of each long option.
+    type LongOpt: Clone;
+
+    /// The type of option values.
+    type Value;
+
+    /// The type of freestanding, positional arguments.
+    type Positional;
 
     /// Returns `true` if this argument signals that no additional
     /// options should be parsed. If this method returns `true`, then
@@ -38,7 +45,7 @@ pub trait Argument: Copy + Eq + Debug {
     /// the string `"--"` (or equivalent in your datatype). It should
     /// not return `true` if [`Self`] merely *starts* with `"--"`, as
     /// that signals a [long option][Self::parse_long_opt].
-    fn ends_opts(self) -> bool;
+    fn ends_opts(&self) -> bool;
 
     /// Attempts to parse this argument as a long option. Returns the
     /// result of the parsing operation, with the leading `--` stripped.
@@ -48,7 +55,7 @@ pub trait Argument: Copy + Eq + Debug {
     /// example, `"--flag"` would parse as `Some(("flag", None))` and
     /// `"--flag=value"` would parse as `Some(("flag", Some("value")))`.
     /// `"--flag="` would parse as `Some(("flag", Some("")))`.
-    fn parse_long_opt(self) -> Option<(Self, Option<Self>)>;
+    fn parse_long_opt(self) -> Result<(Self::LongOpt, Option<Self::Value>), Self>;
 
     /// Attempts to parse this argument as a "short option cluster".
     /// Returns the short option cluster if present.
@@ -69,7 +76,7 @@ pub trait Argument: Copy + Eq + Debug {
     /// This method does not need to guard against `--` long options.
     /// [`parse_long_opt`][Self::parse_long_opt] will be called first by
     /// [`Options::next_opt`][crate::Options::next_opt].
-    fn parse_short_cluster(self) -> Option<Self>;
+    fn parse_short_cluster(self) -> Result<Self::ShortCluster, Self>;
 
     /// Attempts to consume one short option from a "short option
     /// cluster", as defined by
@@ -82,71 +89,108 @@ pub trait Argument: Copy + Eq + Debug {
     /// [`parse_short_cluster`][Self::parse_short_cluster]; namely, its
     /// validity for [`consume_short_opt`][Self::consume_short_opt] or
     /// [`consume_short_val`][Self::consume_short_val].
-    fn consume_short_opt(self) -> (Self::ShortOpt, Option<Self>);
+    fn consume_short_opt(
+        cluster: Self::ShortCluster,
+    ) -> (Self::ShortOpt, Option<Self::ShortCluster>);
 
     /// Consumes the value of a short option from a "short
     /// option cluster", as defined by
     /// [`parse_short_cluster`][Self::parse_short_cluster]. Returns the
     /// value that was consumed.
-    fn consume_short_val(self) -> Self;
+    fn consume_short_val(rest: Self::ShortCluster) -> Result<Self::Value, Self::ShortCluster>;
+
+    /// Converts this argument into an implicit value for an option.
+    fn into_value(self) -> Self::Value;
+
+    /// Converts this argument into a positional argument.
+    fn into_positional(self) -> Self::Positional;
 }
 
 impl Argument for &'_ str {
+    type ShortCluster = Self;
     type ShortOpt = char;
+    type LongOpt = Self;
+    type Value = Self;
+    type Positional = Self;
 
     #[inline]
-    fn ends_opts(self) -> bool {
-        self == "--"
+    fn ends_opts(&self) -> bool {
+        *self == "--"
     }
 
     #[inline]
-    fn parse_long_opt(self) -> Option<(Self, Option<Self>)> {
+    fn parse_long_opt(self) -> Result<(Self::LongOpt, Option<Self::Value>), Self> {
         // Using iterators is slightly faster in release, but many times
         // (>400%) as slow in dev
 
-        let option = self.strip_prefix("--").filter(|s| !s.is_empty())?;
+        let option = self
+            .strip_prefix("--")
+            .filter(|s| !s.is_empty())
+            .ok_or(self)?;
 
         if let Some((option, value)) = option.split_once('=') {
-            Some((option, Some(value)))
+            Ok((option, Some(value)))
         } else {
-            Some((option, None))
+            Ok((option, None))
         }
     }
 
     #[inline]
-    fn parse_short_cluster(self) -> Option<Self> {
-        self.strip_prefix('-').filter(|s| !s.is_empty())
+    fn parse_short_cluster(self) -> Result<Self::ShortCluster, Self> {
+        self.strip_prefix('-').filter(|s| !s.is_empty()).ok_or(self)
     }
 
     #[inline]
-    fn consume_short_opt(self) -> (Self::ShortOpt, Option<Self>) {
-        let ch = self
+    fn consume_short_opt(
+        cluster: Self::ShortCluster,
+    ) -> (Self::ShortOpt, Option<Self::ShortCluster>) {
+        let ch = cluster
             .chars()
             .next()
             .expect("<&str as getargs::Argument>::consume_short_opt called on an empty string");
 
         // using `unsafe` here only improves performance by ~10% and is
         // not worth it for losing the "we don't use `unsafe`" guarantee
-        (ch, Some(&self[ch.len_utf8()..]).filter(|s| !s.is_empty()))
+        (
+            ch,
+            Some(&cluster[ch.len_utf8()..]).filter(|s| !s.is_empty()),
+        )
     }
 
     #[inline]
-    fn consume_short_val(self) -> Self {
+    fn consume_short_val(rest: Self::ShortCluster) -> Result<Self::Value, Self::ShortCluster> {
+        Ok(rest)
+    }
+
+    #[inline]
+    fn into_value(self) -> Self::Value {
+        self
+    }
+
+    #[inline]
+    fn into_positional(self) -> Self::Positional {
         self
     }
 }
 
 impl Argument for &'_ [u8] {
+    type ShortCluster = Self;
     type ShortOpt = u8;
+    type LongOpt = Self;
+    type Value = Self;
+    type Positional = Self;
 
     #[inline]
-    fn ends_opts(self) -> bool {
+    fn ends_opts(&self) -> bool {
         self == b"--"
     }
 
     #[inline]
-    fn parse_long_opt(self) -> Option<(Self, Option<Self>)> {
-        let option = self.strip_prefix(b"--").filter(|a| !a.is_empty())?;
+    fn parse_long_opt(self) -> Result<(Self::LongOpt, Option<Self::Value>), Self> {
+        let option = self
+            .strip_prefix(b"--")
+            .filter(|a| !a.is_empty())
+            .ok_or(self)?;
 
         // This is faster than iterators in dev
         let name = option.split(|b| *b == b'=').next().unwrap();
@@ -156,17 +200,21 @@ impl Argument for &'_ [u8] {
             None
         };
 
-        Some((name, value))
+        Ok((name, value))
     }
 
     #[inline]
-    fn parse_short_cluster(self) -> Option<Self> {
-        self.strip_prefix(b"-").filter(|a| !a.is_empty())
+    fn parse_short_cluster(self) -> Result<Self::ShortCluster, Self> {
+        self.strip_prefix(b"-")
+            .filter(|a| !a.is_empty())
+            .ok_or(self)
     }
 
     #[inline]
-    fn consume_short_opt(self) -> (Self::ShortOpt, Option<Self>) {
-        let (byte, rest) = self
+    fn consume_short_opt(
+        cluster: Self::ShortCluster,
+    ) -> (Self::ShortOpt, Option<Self::ShortCluster>) {
+        let (byte, rest) = cluster
             .split_first()
             .expect("<&[u8] as getargs::Argument>::consume_short_opt called on an empty slice");
 
@@ -174,7 +222,17 @@ impl Argument for &'_ [u8] {
     }
 
     #[inline]
-    fn consume_short_val(self) -> Self {
+    fn consume_short_val(rest: Self::ShortCluster) -> Result<Self::Value, Self::ShortCluster> {
+        Ok(rest)
+    }
+
+    #[inline]
+    fn into_value(self) -> Self::Value {
+        self
+    }
+
+    #[inline]
+    fn into_positional(self) -> Self::Positional {
         self
     }
 }

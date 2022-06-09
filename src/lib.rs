@@ -386,7 +386,6 @@ pub use traits::Argument;
 /// # assert!(opts.opts_ended());
 /// assert_eq!(opts.next_arg(), Ok(None));
 /// ```
-#[derive(Copy, Clone, Debug)]
 pub struct Options<A: Argument, I: Iterator<Item = A>> {
     /// Iterator over the arguments.
     iter: I,
@@ -394,7 +393,6 @@ pub struct Options<A: Argument, I: Iterator<Item = A>> {
     state: State<A>,
 }
 
-#[derive(Copy, Clone, Debug)]
 enum State<A: Argument> {
     /// The starting state. We may not get a value because there is no
     /// previous option. We may get a positional argument or an
@@ -402,7 +400,7 @@ enum State<A: Argument> {
     Start { ended_opts: bool },
     /// We found a positional option and want to preserve it, since it
     /// will no longer be returned from the iterator.
-    Positional(A),
+    Positional(A::Positional),
     /// We have just finished parsing an option, be it short or long,
     /// and we don't know whether the next argument is considered a
     /// value for the option or a positional argument. From here, we
@@ -412,14 +410,18 @@ enum State<A: Argument> {
     /// We are in the middle of a cluster of short options. From here,
     /// we can get the next short option, or we can get the value for
     /// the last short option. We may not get a positional argument.
-    ShortOptionCluster(Opt<A>, A),
+    ShortOptionCluster(A::ShortOpt, A::ShortCluster),
     /// We just consumed a long option with a value attached with `=`,
     /// e.g. `--execute=expression`. We must get the following value.
-    LongOptionWithValue(Opt<A>, A),
+    LongOptionWithValue(A::LongOpt, A::Value),
     /// We have received `None` from the iterator and we are refusing to
     /// advance to be polite.
     End { ended_opts: bool },
+    /// The state has been temporarily taken.
+    Taken,
 }
+
+include!("impls/lib.rs");
 
 impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// Creates a new [`Options`] given an iterator over arguments of
@@ -432,6 +434,13 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
         Options {
             iter,
             state: State::Start { ended_opts: false },
+        }
+    }
+
+    fn take_state(&'_ mut self) -> State<A> {
+        match core::mem::replace(&mut self.state, State::Taken) {
+            State::Taken => unreachable!("attempt to take state twice"),
+            state => state,
         }
     }
 
@@ -454,7 +463,9 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// If your application accepts positional arguments in between
     /// flags, you can use [`Options::next_arg`] instead of `next_opt`.
     pub fn next_opt(&'_ mut self) -> Result<A, Option<Opt<A>>> {
-        match self.state {
+        match self.take_state() {
+            State::Taken => unreachable!(),
+
             State::Start { .. } | State::EndOfOption(_) => {
                 let next = self.iter.next();
 
@@ -468,52 +479,60 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
                 if arg.ends_opts() {
                     self.state = State::Start { ended_opts: true };
                     Ok(None)
-                } else if let Some((name, value)) = arg.parse_long_opt() {
-                    let opt = Opt::Long(name);
-
-                    if let Some(value) = value {
-                        self.state = State::LongOptionWithValue(opt, value);
-                    } else {
-                        self.state = State::EndOfOption(opt);
-                    }
-
-                    Ok(Some(opt))
-                } else if let Some(cluster) = arg.parse_short_cluster() {
-                    let (opt, rest) = cluster.consume_short_opt();
-                    let opt = Opt::Short(opt);
-
-                    if let Some(rest) = rest {
-                        self.state = State::ShortOptionCluster(opt, rest);
-                    } else {
-                        self.state = State::EndOfOption(opt);
-                    }
-
-                    Ok(Some(opt))
                 } else {
-                    self.state = State::Positional(arg);
-                    Ok(None)
+                    match arg.parse_long_opt() {
+                        Ok((name, value)) => {
+                            if let Some(value) = value {
+                                self.state = State::LongOptionWithValue(name.clone(), value);
+                            } else {
+                                self.state = State::EndOfOption(Opt::Long(name.clone()));
+                            }
+
+                            Ok(Some(Opt::Long(name)))
+                        }
+                        Err(arg) => match arg.parse_short_cluster() {
+                            Ok(cluster) => {
+                                let (name, rest) = A::consume_short_opt(cluster);
+
+                                if let Some(rest) = rest {
+                                    self.state = State::ShortOptionCluster(name.clone(), rest);
+                                } else {
+                                    self.state = State::EndOfOption(Opt::Short(name.clone()));
+                                }
+
+                                Ok(Some(Opt::Short(name)))
+                            }
+
+                            Err(arg) => {
+                                self.state = State::Positional(arg.into_positional());
+                                Ok(None)
+                            }
+                        },
+                    }
                 }
             }
 
             State::ShortOptionCluster(_, rest) => {
-                let (opt, rest) = rest.consume_short_opt();
-                let opt = Opt::Short(opt);
+                let (name, rest) = A::consume_short_opt(rest);
 
                 if let Some(rest) = rest {
-                    self.state = State::ShortOptionCluster(opt, rest);
+                    self.state = State::ShortOptionCluster(name.clone(), rest);
                 } else {
-                    self.state = State::EndOfOption(opt);
+                    self.state = State::EndOfOption(Opt::Short(name.clone()));
                 }
 
-                Ok(Some(opt))
+                Ok(Some(Opt::Short(name)))
             }
 
-            State::LongOptionWithValue(opt, _) => {
+            State::LongOptionWithValue(name, _) => {
                 self.state = State::Start { ended_opts: false };
-                Err(Error::DoesNotRequireValue(opt))
+                Err(Error::DoesNotRequireValue(Opt::Long(name)))
             }
 
-            State::Positional(_) | State::End { .. } => Ok(None),
+            state @ (State::Positional(_) | State::End { .. }) => {
+                self.state = state;
+                Ok(None)
+            }
         }
     }
 
@@ -594,25 +613,28 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// assert_eq!(opts.next_opt(), Ok(Some(Opt::Short('c'))));
     /// assert_eq!(opts.value(), Ok("see"));
     /// ```
-    pub fn value(&'_ mut self) -> Result<A, A> {
-        match self.state {
-            State::Start { .. } | State::Positional(_) | State::End { .. } => {
+    pub fn value(&'_ mut self) -> Result<A, A::Value> {
+        match self.take_state() {
+            State::Taken => unreachable!(),
+
+            state @ (State::Start { .. } | State::Positional(_) | State::End { .. }) => {
+                self.state = state;
                 panic!("called Options::value() with no previous option")
             }
 
             State::EndOfOption(opt) => {
                 if let Some(val) = self.iter.next() {
                     self.state = State::Start { ended_opts: false };
-                    Ok(val)
+                    Ok(val.into_value())
                 } else {
                     self.state = State::End { ended_opts: false };
                     Err(Error::RequiresValue(opt))
                 }
             }
 
-            State::ShortOptionCluster(_, val) => {
+            State::ShortOptionCluster(name, val) => {
                 self.state = State::Start { ended_opts: false };
-                Ok(val.consume_short_val())
+                A::consume_short_val(val).map_err(|_| Error::RequiresValue(Opt::Short(name)))
             }
 
             State::LongOptionWithValue(_, val) => {
@@ -664,16 +686,27 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// assert_eq!(opts.value_opt(), Some("value"));
     /// assert_eq!(opts.next_opt(), Ok(None));
     /// ```
-    pub fn value_opt(&'_ mut self) -> Option<A> {
-        match self.state {
-            State::Start { .. } | State::Positional(_) | State::End { .. } => {
+    pub fn value_opt(&'_ mut self) -> Option<A::Value> {
+        match self.take_state() {
+            State::Taken => unreachable!(),
+
+            state @ (State::Start { .. } | State::Positional(_) | State::End { .. }) => {
+                self.state = state;
                 panic!("called Options::value_opt() with no previous option")
             }
 
             // If the option had no explicit `=value`, return None
-            State::EndOfOption(_) => None,
+            state @ State::EndOfOption(_) => {
+                self.state = state;
+                None
+            }
 
-            State::ShortOptionCluster(_, val) | State::LongOptionWithValue(_, val) => {
+            State::ShortOptionCluster(_, rest) => {
+                self.state = State::Start { ended_opts: false };
+                A::consume_short_val(rest).ok()
+            }
+
+            State::LongOptionWithValue(_, val) => {
                 self.state = State::Start { ended_opts: false };
                 Some(val)
             }
@@ -715,21 +748,31 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// assert_eq!(opts.next_positional(), Some("bar"));
     /// assert_eq!(opts.next_positional(), None);
     /// ```
-    pub fn next_positional(&'_ mut self) -> Option<A> {
-        match self.state {
-            State::Start { ended_opts } => self.iter.next().or_else(|| {
-                self.state = State::End { ended_opts };
-                None
-            }),
+    pub fn next_positional(&'_ mut self) -> Option<A::Positional> {
+        match self.take_state() {
+            State::Taken => unreachable!(),
+
+            state @ State::Start { .. } => {
+                let ended_opts = matches!(state, State::Start { ended_opts: true });
+                self.state = state;
+                self.iter.next().map(A::into_positional).or_else(|| {
+                    self.state = State::End { ended_opts };
+                    None
+                })
+            }
 
             State::Positional(arg) => {
                 self.state = State::Start { ended_opts: false };
                 Some(arg)
             }
 
-            State::End { .. } => None,
+            state @ State::End { .. } => {
+                self.state = state;
+                None
+            }
 
-            _ => {
+            state => {
+                self.state = state;
                 panic!("called Options::next_positional() while option parsing hasn't finished")
             }
         }
@@ -772,8 +815,10 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// # Panics
     ///
     /// Panics if an option is currently being parsed.
-    pub fn into_positionals(self) -> IntoPositionals<A, I> {
-        match self.state {
+    pub fn into_positionals(mut self) -> IntoPositionals<A, I> {
+        match self.take_state() {
+            State::Taken => unreachable!(),
+
             State::Start { .. } | State::EndOfOption(_) | State::End { .. } => {
                 IntoPositionals::new(None, self.iter)
             }
@@ -867,7 +912,9 @@ impl<'arg, A: Argument + 'arg, I: Iterator<Item = A>> Options<A, I> {
     /// Panics if iteration is not over, as defined by
     /// [`Options::is_empty`].
     pub fn restart(&'_ mut self) {
-        match self.state {
+        match &self.state {
+            State::Taken => unreachable!(),
+
             State::End { .. } => {
                 self.state = State::Start { ended_opts: false };
             }

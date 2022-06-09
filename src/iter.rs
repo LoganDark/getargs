@@ -23,7 +23,6 @@ use crate::{Argument, Options};
 /// assert_eq!(args.next(), Some("two"));
 /// assert_eq!(args.next(), None);
 /// ```
-#[derive(Debug)]
 pub struct Positionals<'opts, A: Argument, I: Iterator<Item = A>> {
     inner: &'opts mut Options<A, I>,
 }
@@ -35,7 +34,7 @@ impl<'opts, A: Argument, I: Iterator<Item = A>> Positionals<'opts, A, I> {
 }
 
 impl<'opts, A: Argument, I: Iterator<Item = A>> Iterator for Positionals<'opts, A, I> {
-    type Item = A;
+    type Item = A::Positional;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next_positional()
@@ -65,22 +64,25 @@ impl<'opts, A: Argument, I: Iterator<Item = A>> Iterator for Positionals<'opts, 
 /// assert_eq!(iter.next(), Some("two"));
 /// assert_eq!(iter.next(), None);
 /// ```
-#[derive(Copy, Clone, Debug)]
 pub struct IntoPositionals<A: Argument, I: Iterator<Item = A>> {
-    positional: Option<A>,
+    positional: Option<A::Positional>,
     iter: I,
 }
 
 impl<A: Argument, I: Iterator<Item = A>> IntoPositionals<A, I> {
-    pub(crate) fn new(positional: Option<A>, iter: I) -> Self {
+    pub(crate) fn new(positional: Option<A::Positional>, iter: I) -> Self {
         Self { positional, iter }
     }
 }
 
 impl<A: Argument, I: Iterator<Item = A>> Iterator for IntoPositionals<A, I> {
-    type Item = A;
+    type Item = A::Positional;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.positional.take().or_else(|| self.iter.next())
+        self.positional
+            .take()
+            .or_else(|| self.iter.next().map(A::into_positional))
     }
 }
+
+include!("impls/iter.rs");

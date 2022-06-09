@@ -1,5 +1,4 @@
 use crate::{Argument, Opt};
-use core::fmt::{Debug, Display, Formatter};
 
 /// An option or positional argument.
 ///
@@ -7,14 +6,13 @@ use core::fmt::{Debug, Display, Formatter};
 /// [`Options::next_arg`][crate::Options::next_arg] and represents a
 /// short or long command-line option name (but not value) like [`Opt`],
 /// or a positional argument.
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Arg<A: Argument> {
     /// A short option, like `-f`. Does not include the leading `-`.
     Short(A::ShortOpt),
     /// A long option, like `--file`. Does not include the leading `--`.
-    Long(A),
+    Long(A::LongOpt),
     /// A positional argument, like `foo.txt`.
-    Positional(A),
+    Positional(A::Positional),
 }
 
 impl<A: Argument> Arg<A> {
@@ -30,7 +28,7 @@ impl<A: Argument> Arg<A> {
 
     /// Returns the positional [`Argument`] represented by this [`Arg`],
     /// if it is [`Arg::Positional`], otherwise `None`.
-    pub fn positional(self) -> Option<A> {
+    pub fn positional(self) -> Option<A::Positional> {
         match self {
             Self::Positional(arg) => Some(arg),
             _ => None,
@@ -47,18 +45,4 @@ impl<A: Argument> From<Opt<A>> for Arg<A> {
     }
 }
 
-impl<A: Argument> From<A> for Arg<A> {
-    fn from(arg: A) -> Self {
-        Self::Positional(arg)
-    }
-}
-
-impl<S: Display, A: Argument<ShortOpt = S> + Display> Display for Arg<A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Short(short) => write!(f, "-{}", short),
-            Self::Long(long) => write!(f, "--{}", long),
-            Self::Positional(arg) => Display::fmt(arg, f),
-        }
-    }
-}
+include!("impls/arg.rs");
